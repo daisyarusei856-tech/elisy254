@@ -1,25 +1,565 @@
-<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#07100d"><title>ELISY254</title><link rel="stylesheet" href="/styles.css">
-</head><body>
-<div id="landing" class="landing">
-<header><div class="brand"><b>E</b> ELISY254</div></header>
-<section class="hero">
-<span class="eyebrow">DERIV ANALYSIS PLATFORM</span>
-<h1>Welcome to <em>ELISY254</em></h1><h2>LET'S PRINT DOLLARS</h2>
-<p>Live market intelligence, digit analysis, bot tools and a professional Deriv workspace.</p>
-<div class="auth">
-<a class="primary" href="/auth/deriv/start">Sign in with Deriv</a>
-<a class="secondary" href="/auth/deriv/signup">Create Deriv account</a>
-<button class="ghost" onclick="tokenModal()">Use API token</button>
-</div>
-<small>Trading involves risk. No profit or signal is guaranteed.</small>
-</section>
-</div>
-<div id="app" class="hidden">
-<aside id="side"><div class="sidebrand"><b>E</b> ELISY254</div><nav id="nav"></nav><div class="online">● LIVE DATA</div></aside>
-<div class="main"><header class="top"><button onclick="toggleSide()">☰</button><strong id="title">Dashboard</strong><span id="mode">PUBLIC LIVE</span><a href="/admin">ADMIN</a></header>
-<main id="content"></main><nav class="bottom" id="bottom"></nav></div></div>
-<div id="modal" class="modal hidden"></div>
-<script src="/app.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  >
+
+  <meta name="theme-color" content="#08100d">
+
+  <title>ELISY254 — Deriv Analysis Platform</title>
+
+  <link rel="stylesheet" href="/styles.css">
+
+  <style>
+    /* =========================================
+       AUTH SCREEN CONTROL
+    ========================================= */
+
+    .screen-hidden {
+      display: none !important;
+    }
+
+    /* =========================================
+       BOOT SCREEN
+    ========================================= */
+
+    #elisyBoot {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #08100d;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+    }
+
+    #elisyBoot.hidden {
+      display: none !important;
+    }
+
+    .boot-inner {
+      text-align: center;
+      padding: 30px;
+    }
+
+    .boot-logo {
+      width: 68px;
+      height: 68px;
+      margin: 0 auto 18px;
+      border-radius: 18px;
+      background: #b9ff3d;
+      color: #08100d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      font-weight: 900;
+      box-shadow: 0 0 35px rgba(185,255,61,.25);
+    }
+
+    .boot-inner h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+
+    .boot-inner p {
+      margin: 0;
+      opacity: .6;
+      font-size: 14px;
+    }
+
+    /* =========================================
+       LANDING
+    ========================================= */
+
+    #landingScreen {
+      min-height: 100vh;
+    }
+
+    /* =========================================
+       APPLICATION
+    ========================================= */
+
+    #applicationScreen {
+      min-height: 100vh;
+    }
+
+    /* =========================================
+       MODAL
+    ========================================= */
+
+    #modal.hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- =========================================
+       BOOT / SESSION CHECK
+  ========================================= -->
+
+  <div id="elisyBoot">
+
+    <div class="boot-inner">
+
+      <div class="boot-logo">
+        E
+      </div>
+
+      <h2>
+        ELISY254
+      </h2>
+
+      <p>
+        Checking your Deriv session...
+      </p>
+
+    </div>
+
+  </div>
+
+
+  <!-- =========================================
+       LANDING PAGE
+  ========================================= -->
+
+  <section
+    id="landingScreen"
+    class="screen-hidden"
+  >
+
+    <header class="landing-head">
+
+      <div class="brand">
+
+        <span class="brand-mark">
+          E
+        </span>
+
+        <span>
+          ELISY254
+        </span>
+
+      </div>
+
+    </header>
+
+
+    <main class="hero">
+
+      <div class="eyebrow">
+        DERIV ANALYSIS PLATFORM
+      </div>
+
+
+      <h1>
+        WELCOME TO
+        <span>ELISY254</span>
+      </h1>
+
+
+      <h2>
+        LET'S PRINT DOLLARS
+      </h2>
+
+
+      <p>
+        Live Deriv market analysis, digit intelligence,
+        bot tools and professional trading workspace.
+      </p>
+
+
+      <div class="auth-actions">
+
+        <!-- SIGN IN -->
+
+        <button
+          type="button"
+          class="primary"
+          onclick="window.location.href='/auth/deriv/start'"
+        >
+          Sign in with Deriv
+        </button>
+
+
+        <!-- CREATE ACCOUNT -->
+
+        <button
+          type="button"
+          class="secondary"
+          onclick="window.location.href='/auth/deriv/signup'"
+        >
+          Create Deriv account
+        </button>
+
+
+        <!-- API TOKEN -->
+
+        <button
+          type="button"
+          class="ghost"
+          onclick="tokenModal()"
+        >
+          Use API token
+        </button>
+
+      </div>
+
+
+      <p class="fine">
+        Trading involves risk. ELISY254 does not
+        guarantee profits or trading outcomes.
+      </p>
+
+    </main>
+
+  </section>
+
+
+  <!-- =========================================
+       MAIN APPLICATION
+  ========================================= -->
+
+  <section
+    id="applicationScreen"
+    class="screen-hidden"
+  >
+
+    <aside
+      class="sidebar"
+      id="side"
+    >
+
+      <div class="side-brand">
+
+        <span class="brand-mark">
+          E
+        </span>
+
+        <span>
+          ELISY254
+        </span>
+
+      </div>
+
+
+      <!-- SIDEBAR NAVIGATION -->
+
+      <nav id="nav"></nav>
+
+
+      <div class="side-foot">
+
+        <span class="status-dot"></span>
+
+        <span id="connectionText">
+          CONNECTING
+        </span>
+
+      </div>
+
+    </aside>
+
+
+    <div class="shell">
+
+      <!-- =====================================
+           TOP BAR
+      ====================================== -->
+
+      <header class="topbar">
+
+        <button
+          type="button"
+          class="icon-btn"
+          onclick="toggleSide()"
+          aria-label="Open menu"
+        >
+          ☰
+        </button>
+
+
+        <div class="top-title">
+
+          <strong id="title">
+            Dashboard
+          </strong>
+
+          <small id="marketBadge">
+            LIVE
+          </small>
+
+        </div>
+
+
+        <button
+          type="button"
+          class="account"
+          onclick="accountMenu()"
+        >
+          Account
+        </button>
+
+      </header>
+
+
+      <!-- =====================================
+           PAGE CONTENT
+      ====================================== -->
+
+      <main
+        id="content"
+        class="content"
+      ></main>
+
+
+      <!-- =====================================
+           MOBILE NAV
+      ====================================== -->
+
+      <nav
+        id="bottom"
+        class="bottom-nav"
+      ></nav>
+
+    </div>
+
+  </section>
+
+
+  <!-- =========================================
+       MODAL
+  ========================================= -->
+
+  <div
+    id="modal"
+    class="modal hidden"
+  >
+
+    <div class="modalbox">
+
+      <button
+        type="button"
+        class="modal-x"
+        onclick="closeModal()"
+      >
+        ×
+      </button>
+
+      <div id="modalContent"></div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =========================================
+       AUTHENTICATION CONTROLLER
+  ========================================= -->
+
+  <script>
+
+    /*
+     * IMPORTANT
+     *
+     * This runs BEFORE app.js.
+     *
+     * The server already tells us whether the
+     * Deriv OAuth session is authenticated.
+     *
+     * If authenticated === true:
+     *
+     *     LANDING = HIDDEN
+     *     DASHBOARD = SHOWN
+     *
+     * If authenticated === false:
+     *
+     *     DASHBOARD = HIDDEN
+     *     LANDING = SHOWN
+     */
+
+    (async function bootELISY254() {
+
+      const boot =
+        document.getElementById("elisyBoot");
+
+      const landing =
+        document.getElementById("landingScreen");
+
+      const application =
+        document.getElementById("applicationScreen");
+
+
+      try {
+
+        const response = await fetch(
+          "/api/config?_=" + Date.now(),
+          {
+            method: "GET",
+
+            credentials: "include",
+
+            cache: "no-store",
+
+            headers: {
+              "Accept": "application/json",
+              "Cache-Control": "no-cache"
+            }
+          }
+        );
+
+
+        if (!response.ok) {
+          throw new Error(
+            "Authentication check failed: HTTP " +
+            response.status
+          );
+        }
+
+
+        const config =
+          await response.json();
+
+
+        console.log(
+          "ELISY254 CONFIG:",
+          config
+        );
+
+
+        /*
+         * Save authentication state globally
+         * so app.js can use the same state.
+         */
+
+        window.ELISY_CONFIG = config;
+
+        window.ELISY_AUTHENTICATED =
+          config.authenticated === true;
+
+
+        /*
+         * AUTHENTICATED USER
+         */
+
+        if (
+          window.ELISY_AUTHENTICATED === true
+        ) {
+
+          console.log(
+            "ELISY254: authenticated user detected"
+          );
+
+
+          /*
+           * NEVER show landing page.
+           */
+
+          landing.classList.add(
+            "screen-hidden"
+          );
+
+
+          /*
+           * SHOW APPLICATION.
+           */
+
+          application.classList.remove(
+            "screen-hidden"
+          );
+
+        }
+
+
+        /*
+         * NOT AUTHENTICATED
+         */
+
+        else {
+
+          console.log(
+            "ELISY254: guest user"
+          );
+
+
+          /*
+           * Hide application.
+           */
+
+          application.classList.add(
+            "screen-hidden"
+          );
+
+
+          /*
+           * Show landing page.
+           */
+
+          landing.classList.remove(
+            "screen-hidden"
+          );
+
+        }
+
+      }
+
+      catch (error) {
+
+        console.error(
+          "ELISY254 BOOT ERROR:",
+          error
+        );
+
+
+        /*
+         * If the session check fails,
+         * fail safely to landing page.
+         */
+
+        window.ELISY_CONFIG = {
+          authenticated: false
+        };
+
+        window.ELISY_AUTHENTICATED = false;
+
+
+        application.classList.add(
+          "screen-hidden"
+        );
+
+        landing.classList.remove(
+          "screen-hidden"
+        );
+
+      }
+
+
+      /*
+       * Remove loading screen only AFTER
+       * the authentication decision.
+       */
+
+      boot.classList.add("hidden");
+
+
+    })();
+
+  </script>
+
+
+  <!-- =========================================
+       APPLICATION JAVASCRIPT
+  ========================================= -->
+
+  <script src="/app.js"></script>
+
+</body>
+</html>
