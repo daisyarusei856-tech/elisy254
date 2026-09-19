@@ -19,88 +19,67 @@ let latest = null;
 let symbol = "R_75";
 let ws = null;
 let authenticated = false;
-let user = null;
+let config = null;
+let reconnectTimer = null;
+
+/* =========================
+   BASIC HELPERS
+========================= */
 
 function el(selector) {
   return document.querySelector(selector);
 }
 
-// ------------------------------------
-// AUTHENTICATION
-// ------------------------------------
-
-async function checkAuth() {
-  try {
-    const response = await fetch("/api/config", {
-      credentials: "include",
-      cache: "no-store"
-    });
-
-    if (!response.ok) {
-      authenticated = false;
-      return;
-    }
-
-    const config = await response.json();
-
-    authenticated = !!config.authenticated;
-
-    if (authenticated) {
-      user = {
-        provider: "deriv"
-      };
-
-      // IMPORTANT:
-      // OAuth returned successfully, so open dashboard.
-      page = "dashboard";
-    }
-  } catch (error) {
-    console.error("Authentication check failed:", error);
-    authenticated = false;
-  }
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, m => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[m]));
 }
 
-// ------------------------------------
-// NAVIGATION
-// ------------------------------------
+/* =========================
+   NAVIGATION
+========================= */
 
 function nav() {
   const navEl = el("#nav");
   const bottomEl = el("#bottom");
 
   if (navEl) {
-    navEl.innerHTML = F.map(
-      f =>
-        `<button class="nav ${
-          page === f[0] ? "active" : ""
-        }" onclick="go('${f[0]}')">
-          ${f[1]} &nbsp; ${f[2]}
-        </button>`
-    ).join("");
+    navEl.innerHTML = F.map(f => `
+      <button
+        class="nav ${page === f[0] ? "active" : ""}"
+        onclick="go('${f[0]}')"
+      >
+        ${f[1]} &nbsp; ${f[2]}
+      </button>
+    `).join("");
   }
 
   if (bottomEl) {
-    bottomEl.innerHTML = [
+    const mobileItems = [
       F[0],
       F[7],
       F[1],
       F[3],
       ["menu", "☰", "Menu"]
-    ]
-      .map(
-        f =>
-          `<button class="${
-            page === f[0] ? "active" : ""
-          }"
-          onclick="${
-            f[0] === "menu"
-              ? "toggleSide()"
-              : `go('${f[0]}')`
-          }">
-            ${f[1]}<br>${f[2]}
-          </button>`
-      )
-      .join("");
+    ];
+
+    bottomEl.innerHTML = mobileItems.map(f => `
+      <button
+        class="${page === f[0] ? "active" : ""}"
+        onclick="${
+          f[0] === "menu"
+            ? "toggleSide()"
+            : `go('${f[0]}')`
+        }"
+      >
+        ${f[1]}<br>${f[2]}
+      </button>
+    `).join("");
   }
 }
 
@@ -108,10 +87,7 @@ function go(p) {
   page = p;
 
   const side = el("#side");
-
-  if (side) {
-    side.classList.remove("open");
-  }
+  if (side) side.classList.remove("open");
 
   nav();
   render();
@@ -119,217 +95,184 @@ function go(p) {
 
 function toggleSide() {
   const side = el("#side");
-
-  if (side) {
-    side.classList.toggle("open");
-  }
+  if (side) side.classList.toggle("open");
 }
 
-// ------------------------------------
-// DERIV LIVE TICKS
-// ------------------------------------
+/* =========================
+   DERIV TICK DATA
+========================= */
 
-function lastDigit(q) {
-  const s = String(q);
-  const m = s.match(/(\d)(?!.*\d)/);
-
-  return m ? Number(m[1]) : null;
+function lastDigit(quote) {
+  const s = String(quote ?? "");
+  const match = s.match(/(\d)(?!.*\d)/);
+  return match ? Number(match[1]) : null;
 }
 
 function connectTicks() {
-  try {
-    if (ws) {
-      try {
-        ws.close();
-      } catch {}
-    }
-
-    ws = new WebSocket(
-      "wss://api.derivws.com/trading/v1/options/ws/public"
-    );
-
-    ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          ticks: symbol,
-          subscribe: 1
-        })
-      );
-    };
-
-    ws.onmessage = event => {
-      try {
-        const x = JSON.parse(event.data);
-
-        if (
-          x.msg_type === "tick" &&
-          x.tick &&
-          x.tick.quote !== undefined
-        ) {
-          const d = lastDigit(x.tick.quote);
-
-          if (d !== null) {
-            latest = d;
-
-            ticks.push(d);
-
-            if (ticks.length > 300) {
-              ticks.shift();
-            }
-
-            render();
-          }
-        }
-      } catch (error) {
-        console.error(
-          "Tick processing error:",
-          error
-        );
-      }
-    };
-
-    ws.onerror = error => {
-      console.error(
-        "Deriv WebSocket error:",
-        error
-      );
-    };
-
-    ws.onclose = () => {
-      setTimeout(
-        connectTicks,
-        2500
-      );
-    };
-  } catch (error) {
-    console.error(
-      "WebSocket connection error:",
-      error
-    );
-
-    setTimeout(
-      connectTicks,
-      2500
-    );
+  if (ws) {
+    try {
+      ws.close();
+    } catch (_) {}
   }
-}
 
-// ------------------------------------
-// DIGIT ANALYSIS
-// ------------------------------------
-
-function digitsPanel() {
-  const count = Array(10).fill(0);
-
-  ticks.forEach(digit => {
-    if (
-      Number.isInteger(digit) &&
-      digit >= 0 &&
-      digit <= 9
-    ) {
-      count[digit]++;
-    }
-  });
-
-  const order = [...Array(10).keys()].sort(
-    (a, b) =>
-      count[b] - count[a] ||
-      a - b
+  ws = new WebSocket(
+    "wss://api.derivws.com/trading/v1/options/ws/public"
   );
 
-  const high =
-    ticks.length > 0
-      ? order[0]
-      : null;
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      ticks: symbol,
+      subscribe: 1
+    }));
+  };
 
-  const total =
-    ticks.length || 1;
+  ws.onmessage = event => {
+    try {
+      const data = JSON.parse(event.data);
+
+      if (data.msg_type === "tick" && data.tick) {
+        const digit = lastDigit(data.tick.quote);
+
+        if (digit !== null) {
+          latest = digit;
+
+          ticks.push(digit);
+
+          if (ticks.length > 300) {
+            ticks.shift();
+          }
+
+          render();
+        }
+      }
+    } catch (error) {
+      console.error("Tick processing error:", error);
+    }
+  };
+
+  ws.onerror = error => {
+    console.error("Deriv WebSocket error:", error);
+  };
+
+  ws.onclose = () => {
+    clearTimeout(reconnectTimer);
+
+    reconnectTimer = setTimeout(() => {
+      connectTicks();
+    }, 2500);
+  };
+}
+
+/* =========================
+   DIGIT ANALYSIS
+========================= */
+
+function getDigitStats() {
+  const counts = Array(10).fill(0);
+
+  for (const digit of ticks) {
+    if (digit >= 0 && digit <= 9) {
+      counts[digit]++;
+    }
+  }
+
+  const total = ticks.length;
+
+  const order = [...Array(10).keys()].sort((a, b) => {
+    if (counts[b] !== counts[a]) {
+      return counts[b] - counts[a];
+    }
+
+    return a - b;
+  });
+
+  return {
+    counts,
+    order,
+    total
+  };
+}
+
+function digitsPanel() {
+  const {
+    counts,
+    order,
+    total
+  } = getDigitStats();
+
+  const strongest = total > 0 ? order[0] : null;
 
   return `
     <div class="panel">
 
       <div class="digits">
+        ${order.map((digit, index) => {
 
-        ${order
-          .map(
-            (digit, index) => `
-              <div
-                class="d rank${index + 1} ${
-                  latest === digit
-                    ? "hit"
-                    : ""
-                }"
-              >
-                <span class="n">
-                  ${digit}
-                </span>
+          const percentage =
+            total > 0
+              ? (counts[digit] / total * 100).toFixed(1)
+              : "0.0";
 
-                <span class="r">
-                  #${index + 1}
-                  ·
-                  ${(
-                    (count[digit] /
-                      total) *
-                    100
-                  ).toFixed(1)}%
-                </span>
-              </div>
-            `
-          )
-          .join("")}
-
+          return `
+            <div
+              class="d rank${index + 1} ${
+                latest === digit ? "hit" : ""
+              }"
+              title="Digit ${digit}"
+            >
+              <span class="n">${digit}</span>
+              <span class="r">
+                #${index + 1} · ${percentage}%
+              </span>
+            </div>
+          `;
+        }).join("")}
       </div>
 
       <div class="movement">
-
         LATEST DIGIT:
-        <b>
-          ${latest ?? "WAITING"}
-        </b>
+        <b>${latest ?? "WAITING"}</b>
 
         &nbsp; · &nbsp;
 
         HIGH MOMENTUM:
-        <b>
-          ${high ?? "WAITING"}
-        </b>
+        <b>${total ? strongest : "WAITING"}</b>
 
         &nbsp; · &nbsp;
 
         MOVEMENT:
         <b>
           ${
-            ticks.length < 10
+            total < 10
               ? "WAITING FOR DATA"
-              : latest === high
-              ? "ON COURSE"
-              : "OFF COURSE"
+              : latest === strongest
+                ? "ON COURSE"
+                : "OFF COURSE"
           }
         </b>
+      </div>
 
+      <div class="muted" style="margin-top:10px">
+        ${total} live ticks analysed.
       </div>
 
     </div>
   `;
 }
 
-// ------------------------------------
-// DASHBOARD
-// ------------------------------------
+/* =========================
+   DASHBOARD
+========================= */
 
 function dashboard() {
   return `
     <div class="welcome">
-
-      <h1>
-        Welcome back 👋
-      </h1>
+      <h1>Welcome back 👋</h1>
 
       <p class="muted">
-        ELISY254 professional workspace
-        · real public Deriv tick stream
+        ELISY254 professional workspace ·
+        real public Deriv tick stream
       </p>
-
     </div>
 
     <div class="stats">
@@ -343,146 +286,105 @@ function dashboard() {
 
       <div class="stat">
         Market
-        <b>
-          ${symbol}
-        </b>
+        <b>${esc(symbol)}</b>
       </div>
 
       <div class="stat">
         Latest digit
-        <b>
-          ${latest ?? "—"}
-        </b>
+        <b>${latest ?? "—"}</b>
       </div>
 
       <div class="stat">
         Ticks
-        <b>
-          ${ticks.length}
-        </b>
+        <b>${ticks.length}</b>
       </div>
 
     </div>
 
     <div class="section">
-      <h2>
-        Trading tools
-      </h2>
-
-      <span class="pill">
-        12 modules
-      </span>
+      <h2>Trading tools</h2>
+      <span class="pill">12 modules</span>
     </div>
 
     <div class="tools">
 
-      ${F.slice(1)
-        .map(
-          f => `
-            <button
-              class="tool"
-              onclick="go('${f[0]}')"
-            >
+      ${F.slice(1).map(f => `
+        <button
+          class="tool"
+          onclick="go('${f[0]}')"
+        >
+          <div class="ico">${f[1]}</div>
 
-              <div class="ico">
-                ${f[1]}
-              </div>
+          <h3>${esc(f[2])}</h3>
 
-              <h3>
-                ${f[2]}
-              </h3>
-
-              <p>
-                ${f[3]}
-              </p>
-
-            </button>
-          `
-        )
-        .join("")}
+          <p>${esc(f[3])}</p>
+        </button>
+      `).join("")}
 
     </div>
 
     <div class="section">
-
-      <h2>
-        Digit Analysis
-      </h2>
-
-      <span class="pill">
-        REAL TICKS
-      </span>
-
+      <h2>Digit Analysis</h2>
+      <span class="pill">REAL TICKS</span>
     </div>
 
     ${digitsPanel()}
   `;
 }
 
-// ------------------------------------
-// PAGE SHELL
-// ------------------------------------
+/* =========================
+   PAGE SHELL
+========================= */
 
-function pageShell(f, body) {
+function pageShell(feature, body) {
   return `
     <div class="welcome">
-
-      <h1>
-        ${f[2]}
-      </h1>
+      <h1>${esc(feature[2])}</h1>
 
       <p class="muted">
-        ${f[3]}
+        ${esc(feature[3])}
       </p>
-
     </div>
 
     ${body}
   `;
 }
 
-// ------------------------------------
-// RENDER
-// ------------------------------------
+/* =========================
+   RENDER
+========================= */
 
 function render() {
-  const content = el("#content");
-
-  if (!content) {
-    return;
-  }
-
-  const f =
-    F.find(x => x[0] === page) ||
-    F[0];
+  const feature =
+    F.find(x => x[0] === page) || F[0];
 
   const title = el("#title");
 
   if (title) {
-    title.textContent = f[2];
+    title.textContent = feature[2];
   }
 
-  let contentHTML = "";
+  let content = "";
 
   if (page === "dashboard") {
-    contentHTML = dashboard();
-  }
 
-  else if (page === "digits") {
-    contentHTML = pageShell(
-      f,
+    content = dashboard();
+
+  } else if (page === "digits") {
+
+    content = pageShell(
+      feature,
       digitsPanel()
     );
-  }
 
-  else if (page === "bot_builder") {
-    contentHTML = pageShell(
-      f,
+  } else if (page === "bot_builder") {
+
+    content = pageShell(
+      feature,
       `
         <div class="panel">
 
           <div class="flow">
-
             ${
               [
                 "LIVE MARKET",
@@ -492,28 +394,18 @@ function render() {
                 "SIGNAL",
                 "RISK CHECK",
                 "EXECUTION"
-              ]
-                .map(
-                  (x, i) =>
-                    `
-                      <div class="step ${
-                        i < 3
-                          ? "active"
-                          : ""
-                      }">
-                        ${x}
-                      </div>
-                    `
-                )
-                .join("")
+              ].map((step, index) => `
+                <div class="step ${
+                  index < 3 ? "active" : ""
+                }">
+                  ${step}
+                </div>
+              `).join("")
             }
-
           </div>
 
           <div class="section">
-            <h2>
-              Bot controls
-            </h2>
+            <h2>Bot controls</h2>
           </div>
 
           <div class="actions">
@@ -538,60 +430,53 @@ function render() {
         </div>
       `
     );
-  }
 
-  else if (page === "ai") {
-    contentHTML = pageShell(
-      f,
+  } else if (page === "ai") {
+
+    content = pageShell(
+      feature,
       `
         <div class="panel">
 
-          <h2>
-            AI ANALYSIS
-          </h2>
+          <h2>AI ANALYSIS</h2>
 
           <p class="muted">
-            AI results are shown only
-            when a real provider is
-            configured. No fabricated
-            AI signal is displayed.
+            AI results are shown only when a real
+            provider is configured. No fabricated AI
+            signal is displayed.
           </p>
 
           <div class="movement">
             Current digit engine:
-            real Deriv tick data
-            · ${ticks.length}
-            ticks received.
+            real Deriv tick data ·
+            ${ticks.length} ticks received.
           </div>
 
         </div>
       `
     );
-  }
 
-  else if (page === "free") {
-    contentHTML = pageShell(
-      f,
+  } else if (page === "free") {
+
+    content = pageShell(
+      feature,
       `<div id="bots" class="botadmin"></div>`
     );
-  }
 
-  else {
-    contentHTML = pageShell(
-      f,
+  } else {
+
+    content = pageShell(
+      feature,
       `
         <div class="panel">
 
-          <h2>
-            ${f[3]}
-          </h2>
+          <h2>${esc(feature[3])}</h2>
 
           <p class="muted">
             Production module shell.
-            Account-scoped actions
-            require authenticated
-            Deriv authorization and
-            explicit user confirmation.
+            Account-scoped actions require
+            authenticated Deriv authorization
+            and explicit user confirmation.
           </p>
 
         </div>
@@ -599,165 +484,131 @@ function render() {
     );
   }
 
-  content.innerHTML =
-    contentHTML;
+  const contentEl = el("#content");
+
+  if (contentEl) {
+    contentEl.innerHTML = content;
+  }
 
   if (page === "free") {
     loadBots();
   }
 }
 
-// ------------------------------------
-// FREE BOTS
-// ------------------------------------
+/* =========================
+   FREE BOTS
+========================= */
 
 async function loadBots() {
+  const container = el("#bots");
+
+  if (!container) return;
+
   try {
-    const response =
-      await fetch("/api/bots", {
-        credentials: "include"
-      });
+    const response = await fetch(
+      "/api/bots",
+      {
+        credentials: "include",
+        cache: "no-store"
+      }
+    );
 
     if (!response.ok) {
       throw new Error(
-        "Unable to load bots"
+        `Bot request failed: ${response.status}`
       );
     }
 
-    const bots =
-      await response.json();
+    const bots = await response.json();
 
-    const botsEl = el("#bots");
-
-    if (!botsEl) {
-      return;
-    }
-
-    botsEl.innerHTML =
-      bots.length
-        ? bots
-            .map(
-              bot => `
-                <div class="panel">
-
-                  <div
-                    class="circle-preview"
-                    style="background:${bot.color}"
-                  >
-                    ${
-                      (bot.name || "B")
-                        .slice(0, 1)
-                        .toUpperCase()
-                    }
-                  </div>
-
-                  <h3>
-                    ${esc(bot.name)}
-                  </h3>
-
-                  <p class="muted">
-                    ${esc(
-                      bot.description
-                    )}
-                  </p>
-
-                  ${
-                    bot.filename
-                      ? `
-                        <a
-                          class="action"
-                          href="/api/bots/${bot.id}/file"
-                        >
-                          Download bot
-                        </a>
-                      `
-                      : ""
-                  }
-
-                </div>
-              `
-            )
-            .join("")
-        : `
-          <div class="panel">
-
-            <h3>
-              No free bots yet
-            </h3>
-
-            <p class="muted">
-              Admin can publish bots
-              from /admin.
-            </p>
-
-          </div>
-        `;
-  } catch (error) {
-    console.error(
-      "Free bot loading error:",
-      error
-    );
-
-    const botsEl = el("#bots");
-
-    if (botsEl) {
-      botsEl.innerHTML = `
+    if (!bots.length) {
+      container.innerHTML = `
         <div class="panel">
-          <h3>
-            Unable to load free bots
-          </h3>
+          <h3>No free bots yet</h3>
 
           <p class="muted">
-            Please try again later.
+            Admin can publish bots from /admin.
           </p>
         </div>
       `;
+
+      return;
     }
+
+    container.innerHTML = bots.map(bot => `
+      <div class="panel">
+
+        <div
+          class="circle-preview"
+          style="background:${esc(bot.color || "#b9ff3d")}"
+        >
+          ${esc(
+            (bot.name || "B")
+              .slice(0, 1)
+              .toUpperCase()
+          )}
+        </div>
+
+        <h3>${esc(bot.name)}</h3>
+
+        <p class="muted">
+          ${esc(bot.description)}
+        </p>
+
+        ${
+          bot.filename
+            ? `
+              <a
+                class="action"
+                href="/api/bots/${bot.id}/file"
+              >
+                Download bot
+              </a>
+            `
+            : ""
+        }
+
+      </div>
+    `).join("");
+
+  } catch (error) {
+
+    console.error(error);
+
+    container.innerHTML = `
+      <div class="panel">
+
+        <h3>Unable to load free bots</h3>
+
+        <p class="muted">
+          Please try again.
+        </p>
+
+      </div>
+    `;
   }
 }
 
-// ------------------------------------
-// ESCAPE HTML
-// ------------------------------------
-
-function esc(s) {
-  return String(s || "").replace(
-    /[&<>"']/g,
-    m =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-      }[m])
-  );
-}
-
-// ------------------------------------
-// API TOKEN MODAL
-// ------------------------------------
+/* =========================
+   API TOKEN MODAL
+========================= */
 
 function tokenModal() {
   const modal = el("#modal");
 
-  if (!modal) {
-    return;
-  }
+  if (!modal) return;
 
   modal.className = "modal";
 
   modal.innerHTML = `
     <div class="modalbox">
 
-      <h2>
-        API token
-      </h2>
+      <h2>API token</h2>
 
       <p class="muted">
-        Use your Deriv API token
-        to authenticate. Never
-        share your token with anyone.
+        Enter your Deriv API token only when you
+        intentionally want to authenticate with it.
+        Never share your token with anyone.
       </p>
 
       <div class="field">
@@ -765,8 +616,8 @@ function tokenModal() {
         <input
           id="apiTokenInput"
           type="password"
-          placeholder="Deriv API token"
           autocomplete="off"
+          placeholder="Deriv API token"
         >
 
       </div>
@@ -780,6 +631,7 @@ function tokenModal() {
 
       <button
         class="action"
+        style="margin-top:8px"
         onclick="closeModal()"
       >
         Cancel
@@ -793,48 +645,136 @@ function closeModal() {
   const modal = el("#modal");
 
   if (modal) {
-    modal.className =
-      "modal hidden";
+    modal.className = "modal hidden";
   }
 }
 
+/*
+  IMPORTANT:
+  This function does NOT pretend that token
+  authentication works if there is no backend
+  token-validation endpoint.
+*/
 async function submitApiToken() {
-  const input =
-    el("#apiTokenInput");
+  const input = el("#apiTokenInput");
 
-  if (!input) {
+  if (!input || !input.value.trim()) {
+    alert("Enter a Deriv API token.");
     return;
   }
 
-  const token =
-    input.value.trim();
-
-  if (!token) {
-    alert(
-      "Please enter your Deriv API token."
-    );
-    return;
-  }
-
-  // The current backend does not yet
-  // expose a token-login endpoint.
-  // Do not pretend the token was accepted.
   alert(
-    "API token authentication is not yet connected to the backend."
+    "API-token authentication is not connected to a backend validation endpoint yet. Use Sign in with Deriv for the current live OAuth login."
   );
 }
 
-// ------------------------------------
-// START APPLICATION
-// ------------------------------------
+/* =========================
+   AUTHENTICATION CHECK
+========================= */
+
+async function checkAuthentication() {
+  try {
+
+    const response = await fetch(
+      "/api/config",
+      {
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          "Accept": "application/json"
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Config request failed: ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    config = data;
+
+    authenticated = data.authenticated === true;
+
+    console.log(
+      "ELISY254 authentication:",
+      authenticated
+    );
+
+    console.log(
+      "ELISY254 config:",
+      data
+    );
+
+    return authenticated;
+
+  } catch (error) {
+
+    console.error(
+      "Authentication check failed:",
+      error
+    );
+
+    authenticated = false;
+
+    return false;
+  }
+}
+
+/* =========================
+   START APPLICATION
+========================= */
 
 async function startApp() {
-  await checkAuth();
+
+  /*
+    FIRST:
+    Check the server session.
+
+    This is the important part that fixes
+    the OAuth -> landing page problem.
+  */
+
+  const loggedIn = await checkAuthentication();
+
+  if (loggedIn) {
+
+    /*
+      User has already completed Deriv OAuth.
+      Open Dashboard directly.
+    */
+
+    page = "dashboard";
+
+  } else {
+
+    /*
+      No authenticated session.
+      Keep the normal page state.
+    */
+
+    page = "dashboard";
+  }
 
   nav();
   render();
 
+  /*
+    Start real Deriv public tick stream.
+  */
+
   connectTicks();
 }
 
-startApp();
+/* =========================
+   START
+========================= */
+
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
+    startApp();
+  }
+);
