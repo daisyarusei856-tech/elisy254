@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07100d"><title>ELISY254</title><link rel="stylesheet" href="/styles.css">
+</head><body>
+<div id="landing" class="landing">
+<header><div class="brand"><b>E</b> ELISY254</div></header>
+<section class="hero">
+<span class="eyebrow">DERIV ANALYSIS PLATFORM</span>
+<h1>Welcome to <em>ELISY254</em></h1><h2>LET'S PRINT DOLLARS</h2>
+<p>Live market intelligence, digit analysis, bot tools and a professional Deriv workspace.</p>
+<div class="auth">
+<a class="primary" href="/auth/deriv/start">Sign in with Deriv</a>
+<a class="secondary" href="/auth/deriv/signup">Create Deriv account</a>
+<button class="ghost" onclick="tokenModal()">Use API token</button>
+</div>
+<small>Trading involves risk. No profit or signal is guaranteed.</small>
+</section>
+</div>
+<div id="app" class="hidden">
+<aside id="side"><div class="sidebrand"><b>E</b> ELISY254</div><nav id="nav"></nav><div class="online">● LIVE DATA</div></aside>
+<div class="main"><header class="top"><button onclick="toggleSide()">☰</button><strong id="title">Dashboard</strong><span id="mode">PUBLIC LIVE</span><a href="/admin">ADMIN</a></header>
+<main id="content"></main><nav class="bottom" id="bottom"></nav></div></div>
+<div id="modal" class="modal hidden"></div>
+<script src="/app.js"></script></body></html>

@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: elisy254
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BASE_URL
+        sync: false
+      - key: DERIV_CLIENT_ID
+        sync: false
+      - key: DERIV_REDIRECT_URI
+        sync: false
+      - key: DERIV_SIGNUP_TRACKING_TOKEN
+        sync: false
+      - key: DERIV_AFFILIATE_ID
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: DATABASE_PATH
+        value: /opt/render/project/src/data/elisy254.db
